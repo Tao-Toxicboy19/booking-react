@@ -1,0 +1,226 @@
+import { format } from 'date-fns'
+import {
+  Paper,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  Grid2,
+  Box,
+  List,
+  ListItem,
+} from '@mui/material'
+import { useCalendar } from './useCalendar'
+import { parseDate, useTaskData } from './useTaskData' // Import custom hook
+import { useState } from 'react'
+import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  DropResult,
+} from '@hello-pangea/dnd'
+
+type Props = {}
+
+export default function App({}: Props) {
+  const { currentMonth, actions } = useCalendar() // destructuring object ที่ถูก return มาจาก useCalendar
+  const today = new Date()
+  const monthName = format(currentMonth.value, 'MMMM yyyy')
+  const todayFormatted = format(today, 'EEEE, d MMMM yyyy')
+
+  const [tasks, setTasks] = useState([
+    {
+      id: '1',
+      date: '08/09/2024',
+      task: 'ประชุม',
+    },
+    {
+      id: '2',
+      date: '10/09/2024',
+      task: 'ประชุม2',
+    },
+    {
+      id: '3',
+      date: '08/09/2024',
+      task: 'ประชุม3',
+    },
+  ])
+
+  console.log(tasks)
+
+  // ใช้ useTaskData เพื่อเตรียมข้อมูล task สำหรับเดือนปัจจุบัน
+  const taskDataForMonth = useTaskData(currentMonth.daysInCurrentMonth, tasks)
+
+  // source ต้นทาง
+  // destination ปลายทาง
+  function handleOnDragEnd(result: DropResult) {
+    const { source, destination } = result
+
+    // If there is no destination (e.g., task is dropped outside), return
+    if (!destination) return
+
+    // If the task was dropped back in the same position, return
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    )
+      return
+
+    // Update the task's date to the new droppable date (day)
+    const updatedTasks = [...tasks]
+    const [movedTask] = updatedTasks.splice(source.index, 1) // Remove the task from the source
+    movedTask.date = destination.droppableId // Update the task's date to the new day (destination droppableId)
+
+    updatedTasks.splice(destination.index, 0, movedTask) // Insert the task into the new position
+
+    setTasks(updatedTasks) // Update the tasks state with the new task list
+  }
+
+  return (
+    <div>
+      {/* แสดงวันนี้ด้านบน */}
+      <Typography variant='h6' align='center' style={{ marginBottom: '16px' }}>
+        Today is {todayFormatted}
+      </Typography>
+
+      {/* ปุ่มเลื่อนเดือน */}
+      <Grid2
+        container
+        justifyContent='space-between'
+        alignItems='center'
+        spacing={2}
+        style={{ marginBottom: '16px' }}
+      >
+        <Grid2>
+          <Button variant='contained' onClick={actions.handlePreviousMonth}>
+            Previous
+          </Button>
+        </Grid2>
+        <Grid2>
+          <Typography variant='h6' align='center'>
+            {monthName}
+          </Typography>
+        </Grid2>
+        <Grid2>
+          <Button variant='contained' onClick={actions.handleNextMonth}>
+            Next
+          </Button>
+        </Grid2>
+      </Grid2>
+
+      {/* แสดงวันในเดือน */}
+      <Paper elevation={3} sx={{ padding: '16px' }}>
+        <DragDropContext onDragEnd={handleOnDragEnd}>
+          <Grid2 container spacing={0.5} columns={7} sx={{ mb: 1 }}>
+            {/* แสดงชื่อวันด้านบน */}
+            {[
+              'Sunday',
+              'Monday',
+              'Tuesday',
+              'Wednesday',
+              'Thursday',
+              'Friday',
+              'Saturday',
+            ].map((day, index) => (
+              <Grid2
+                size={1}
+                key={index}
+                sx={{
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  padding: '8px',
+                }}
+              >
+                <Typography
+                  variant='body2'
+                  align='center'
+                  style={{ fontWeight: 'bold' }}
+                >
+                  {day}
+                </Typography>
+              </Grid2>
+            ))}
+          </Grid2>
+
+          {/* เพิ่มวันของเดือนก่อนหน้าในช่องว่าง */}
+          <Grid2 container spacing={1} columns={7}>
+            {Array.from({ length: currentMonth.firstDayIndex }).map(
+              (_, index) => (
+                <Grid2 size={1} key={`empty-${index}`}>
+                  <Card>
+                    <CardContent>
+                      <Typography
+                        variant='body2'
+                        align='center'
+                        style={{ color: '#aaa' }}
+                      >
+                        {format(
+                          currentMonth.daysInPreviousMonth[
+                            currentMonth.daysInPreviousMonth.length -
+                              currentMonth.firstDayIndex +
+                              index
+                          ],
+                          'd',
+                        )}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid2>
+              ),
+            )}
+
+            {/* แสดงวันที่ในเดือนปัจจุบัน */}
+            {taskDataForMonth.map(({ day, tasks }, index) => (
+              <Grid2
+                size={1}
+                key={index}
+                component='div' // เปลี่ยนเป็น 'div' เพราะ Droppable ไม่สามารถเป็น component ตรงๆ ของ Grid ได้
+              >
+                <Card sx={{ height: 200 }}>
+                  <CardContent>
+                    <Typography variant='body2'>{format(day, 'd')}</Typography>
+
+                    <Droppable droppableId={format(day, 'dd/MM/yyyy')}>
+                      {(provided) => (
+                        <Box>
+                          <List
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                          >
+                            {tasks.length > 0 &&
+                              tasks.map((task, index) => (
+                                <Draggable
+                                  key={task.id}
+                                  draggableId={task.id}
+                                  index={index}
+                                >
+                                  {(provided) => (
+                                    <ListItem
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      sx={{
+                                        userSelect: 'none',
+                                        ...provided.draggableProps.style,
+                                      }}
+                                    >
+                                      {task.task}
+                                    </ListItem>
+                                  )}
+                                </Draggable>
+                              ))}
+                            {provided.placeholder}
+                          </List>
+                        </Box>
+                      )}
+                    </Droppable>
+                  </CardContent>
+                </Card>
+              </Grid2>
+            ))}
+          </Grid2>
+        </DragDropContext>
+      </Paper>
+    </div>
+  )
+}
